@@ -1,0 +1,10 @@
+A browser based application to monitor stock and mutual fund performance.
+
+Load via http://genotrance.github.io/stocks. All content is stored in local 
+browser storage.
+
+Stocks is currently hosted on GitHub pages but is run completely in the 
+browser. There is no dependency on GitHub beyond the initial load.
+
+Stocks uses YQL to download the latest stock data. All user data is stored
+locally and is not transmitted to any remote sites.
