@@ -17,11 +17,14 @@ var dirty = false;
 var key = "";
 var hash = "";
 var rev = "";
-var deps = [jquery, aes, sha1, cookie, momentjs, datatable, storageapi, highstock];
+var deps = [jquery, cookie, momentjs, datatable, storageapi, highstock];
 var css = [datatable_css];
 var stock_data = {};
 var pending = 0;
-var table = null;
+var latest_table = null;
+var history_table = null;
+var dividend_table = null;
+var active_table = null;
 var chart = null;
 var storage = null;
 var mobile = false;
@@ -33,12 +36,23 @@ if (window.matchMedia) {
 // HTML
 var gui =
 	'<div id="popup" name="popup">' +
-		'<div id="stocks" name="stocks"><table id="table"></table></div>' +
-		'<div id="charts" name="charts"></div>' +
 		'Add Ticker(s): <input type="text" name="tick" id="tick"></input> ' +
 		'<a href="#" onclick="clear_all();return false;">Clear</a> ' +
 		'<a href="#" onclick="delete_ticker();return false;">Delete</a> ' +
-		'<div id="message" name="message"></div>' +
+		'<a href="#" onclick="show_table(\'latest\');return false;">Latest</a> ' + 
+		'<a href="#" onclick="show_table(\'history\');return false;">History</a> ' + 
+		'<a href="#" onclick="show_table(\'dividend\');return false;">Dividend</a> ' + 
+		'<div id="message" name="message"></div><br/><br/>' +
+		'<div id="latest_div" name="latest_div">Current Status' +
+			'<table id="latest_table"></table>' + 
+		'</div>' +
+		'<div id="history_div" name="history_div">Growth History' +
+			'<table id="history_table"></table>' + 
+		'</div>' +
+		'<div id="dividend_div" name="dividend_div">Dividend History' +
+			'<table id="dividend_table"></table>' + 
+		'</div>' +
+		'<div id="charts" name="charts"></div>' +
 	'</div>';
 
 // Load dependencies
@@ -128,7 +142,7 @@ function setup_gui() {
 		"background-color": "white",
 		"opacity": 1,
 		"filter": "alpha(opacity=100)",
-		"-moz-opacity": 1, 
+		"-moz-opacity": 1
 	});
 	
 	$("#message").css({
@@ -151,11 +165,28 @@ function setup_gui() {
 		"font-family": "Arial",
 		"font-size": "10",
 		"color": "blue",
-		"text-decoration": "underline",
+		"text-decoration": "underline"
 	});
+	
+	$("#latest_div").css({
+		"text-align": "center"
+	});
+
+	$("#history_div").css({
+		"text-align": "center"
+	});
+
+	$("#dividend_div").css({
+		"text-align": "center"
+	});
+
+	$("#history_div").hide();
+	$("#dividend_div").hide();
 
 	setup_table();
 	setup_charts();
+	
+	active_table = latest_table;
 }
 
 //////
@@ -163,7 +194,22 @@ function setup_gui() {
 
 // Setup Datatables
 function setup_table() {
-	table = $("#table").DataTable({
+	latest_table = $("#latest_table").DataTable({
+		paging: false,
+		autoWidth: true,
+		
+		columns: [
+			{title: "Ticker", sClass: "center", sType: "html"},
+			{title: "Name", sClass: "center"},
+			{title: "$Last", sClass: "center"},
+			{title: "$Max", sClass: "center"},
+			{title: "$Min", sClass: "center"},
+			{title: "$Range", sClass: "center"},
+			{title: "%Potential", sClass: "center"},
+		]
+	});
+
+	history_table = $("#history_table").DataTable({
 		paging: false,
 		autoWidth: true,
 		
@@ -178,11 +224,16 @@ function setup_table() {
 			{title: "%YTD", sClass: "center"},
 			{title: "%Year", sClass: "center"},
 			{title: "%Year", sClass: "center"},
-			{title: "$Last", sClass: "center"},
-			{title: "$Max", sClass: "center"},
-			{title: "$Min", sClass: "center"},
-			{title: "$Range", sClass: "center"},
-			{title: "%Potential", sClass: "center"},
+		]
+	});
+
+	dividend_table = $("#dividend_table").DataTable({
+		paging: false,
+		autoWidth: true,
+		
+		columns: [
+			{title: "Ticker", sClass: "center", sType: "html"},
+			{title: "Name", sClass: "center"},
 			{title: "%YTD", sClass: "center"},
 			{title: "%Year", sClass: "center"},
 			{title: "%Year", sClass: "center"},
@@ -198,27 +249,38 @@ function setup_table() {
 function add_to_table(tick) {	
 	var value = stock_data[tick];
 	
-	remove_from_table(tick);
+	remove_from_tables(tick);
 	
 	var type = "historical";
-	var data = [
-		'<a href="' + mstar + tick + '" target=_blank onclick="setTimeout(function() { table.$(\'tr.selected\').removeClass(\'selected\'); }, 0);">' + tick + '</a>', value.description,
-		round(value[type].totalgrowth) + "%<br/" + value[type].growth.date[value[type].growth.date.length-1] + "+",
-		round(value[type].daygrowth) + "%", round(value[type].weekgrowth) + "%",
-		round(value[type].monthgrowth) + "%", round(value[type].sixmonthgrowth) + "%",
-		value[type].growth.value.length>0?round(value[type].growth.value[0]) + "%<br/>" + value[type].growth.date[0]:"",
-		value[type].growth.value.length>1?round(value[type].growth.value[1]) + "%<br/>" + value[type].growth.date[1]:"",
-		value[type].growth.value.length>2?round(value[type].growth.value[2]) + "%<br/>" + value[type].growth.date[2]:"",
+	var latest_data = [
+		'<a href="' + mstar + tick + '" target=_blank onclick="setTimeout(function() { latest_table.$(\'tr.selected\').removeClass(\'selected\'); }, 0);">' + tick + '</a>', value.description,
 		"$" + round(value[type].last) + "<br/>" + value[type].lastdate, 
 		"$" + round(value[type].max) + "<br/>" + value[type].maxdate, 
 		"$" + round(value[type].min) + "<br/>" + value[type].mindate,
 		"$" + round(value[type].range),
 		round(value[type].potential) + "%"
 	];
+
+	latest_table.row.add(latest_data);
+	latest_table.draw();
 	
+	var history_data = [
+		'<a href="' + mstar + tick + '" target=_blank onclick="setTimeout(function() { history_table.$(\'tr.selected\').removeClass(\'selected\'); }, 0);">' + tick + '</a>', value.description,
+		round(value[type].totalgrowth) + "%<br/" + value[type].growth.date[value[type].growth.date.length-1] + "+",
+		round(value[type].daygrowth) + "%", round(value[type].weekgrowth) + "%",
+		round(value[type].monthgrowth) + "%", round(value[type].sixmonthgrowth) + "%",
+		value[type].growth.value.length>0?round(value[type].growth.value[0]) + "%<br/>" + value[type].growth.date[0]:"",
+		value[type].growth.value.length>1?round(value[type].growth.value[1]) + "%<br/>" + value[type].growth.date[1]:"",
+		value[type].growth.value.length>2?round(value[type].growth.value[2]) + "%<br/>" + value[type].growth.date[2]:"",
+	];
+
+	history_table.row.add(history_data);
+	history_table.draw();
+
 	type = "dividend";
 	if (value.hasOwnProperty(type) == true) {
-		$.merge(data, [
+		var dividend_data = [
+			'<a href="' + mstar + tick + '" target=_blank onclick="setTimeout(function() { dividend_table.$(\'tr.selected\').removeClass(\'selected\'); }, 0);">' + tick + '</a>', value.description,
 			round(value[type].historical.lastpercent) + "%<br/>" + value[type].historical.lastdate,
 			value[type].historical.percent.length>1?round(value[type].historical.percent[1]) + "%<br/>" + value[type].historical.date[1]:"", 
 			value[type].historical.percent.length>2?round(value[type].historical.percent[2]) + "%<br/>" + value[type].historical.date[2]:"", 
@@ -226,17 +288,22 @@ function add_to_table(tick) {
 			round(value[type].historical.minpercent) + "%<br/>" + value[type].historical.mindate, 
 			round(value[type].historical.rangepercent) + "%",
 			round(value[type].historical.avgpercent) + "%",
-		]);
-	} else {
-		$.merge(data, ["", "", "", "", "", "", "", "", "", ""]);
+		];
+		
+		dividend_table.row.add(dividend_data);
+		dividend_table.draw();
 	}
-	
-	table.row.add(data);
-	table.draw();
 }
 
-// Remove tick from table
-function remove_from_table(tick) {
+// Remove tick from all tables
+function remove_from_tables(tick) {
+	remove_from_table(tick, latest_table);
+	remove_from_table(tick, history_table);
+	remove_from_table(tick, dividend_table);
+}
+
+// Remove tick from each table
+function remove_from_table(tick, table) {
 	var ticks = table.column(0).data();
 
 	for (var i = ticks.length-1; i >= 0; i--) {
@@ -244,6 +311,8 @@ function remove_from_table(tick) {
 			table.row(table.rows()[0][i]).remove();
 		}
 	}
+	
+	table.draw();
 }
 
 // Round
@@ -261,7 +330,7 @@ function setup_charts() {
 			type: "line"
 		},
 		title: {
-			text: "Growth of $10k"
+			text: "%Growth"
 		},
 		legend: {
 			enabled: true
@@ -275,14 +344,7 @@ function setup_charts() {
 function add_to_chart(tick) {
 	remove_from_chart(tick);
 	
-	var data = stock_data[tick].historical.data;
-	var out = [];
-	var numshares = 10000 / data.value[data.value.length-1]
-	for (var i = data.date.length-1; i >= 0; i--) {
-		out.push([moment(data.date[i]).valueOf(), round(numshares * data.value[i])]);
-	}
-
-	chart.addSeries({name: tick, data: out});
+	chart.addSeries({name: tick, data: stock_data[tick].historical.chartgrowth});
 }
 
 // Remove from chart
@@ -303,11 +365,29 @@ function bind_events() {
 	$(document).bind('resize', resize);
 	$("#tick").bind("change", add_ticker);
 	
-	table.on("click", 'tr', function() {
+	latest_table.on("click", 'tr', function() {
         if ($(this).hasClass("selected")) {
             $(this).removeClass("selected");
         } else {
-			table.$("tr.selected").removeClass("selected");
+			latest_table.$("tr.selected").removeClass("selected");
+            $(this).addClass("selected");
+        }
+    });
+
+	history_table.on("click", 'tr', function() {
+        if ($(this).hasClass("selected")) {
+            $(this).removeClass("selected");
+        } else {
+			history_table.$("tr.selected").removeClass("selected");
+            $(this).addClass("selected");
+        }
+    });
+
+	dividend_table.on("click", 'tr', function() {
+        if ($(this).hasClass("selected")) {
+            $(this).removeClass("selected");
+        } else {
+			dividend_table.$("tr.selected").removeClass("selected");
             $(this).addClass("selected");
         }
     });
@@ -331,7 +411,7 @@ function add_ticker() {
 			seen[tick] = true;
 			tick = tick.trim();
 			if (tick != "" && stock_data.hasOwnProperty(tick) == false) {
-				load_stock(tick, "3 years");
+				load_stock(tick, "50 years");
 			}
 		}
 	});
@@ -339,23 +419,36 @@ function add_ticker() {
 
 // Delete ticker
 function delete_ticker() {
-	var data = table.row(".selected").data();
+	var data = active_table.row(".selected").data();
 	var tick = data[0].replace(/<.*?>/g, "");
 	
 	delete stock_data[tick];
 	storage.remove("stock_data." + tick);
 	
-	table.row(".selected").remove().draw(false);
+	remove_from_tables(tick);
 	remove_from_chart(tick);
 }
 
 // Clear all tickers
 function clear_all() {
-	table.clear().draw();
+	latest_table.clear().draw();
+	history_table.clear().draw();
+	dividend_table.clear().draw();
 	chart.destroy();
 	setup_charts();
 	stock_data = {};
 	storage.remove("stock_data");
+}
+
+// Show requested table
+function show_table(table) {
+	$("#latest_div").hide();
+	$("#history_div").hide();
+	$("#dividend_div").hide();
+	
+	$("#" + table + "_div").show();
+	
+	active_table = $("#" + table + "_table").DataTable();
 }
 
 //////
@@ -575,28 +668,33 @@ function analyze_stock(tick, type) {
 		var year = "";
 		var newyear = "";
 		var delta = 0;
-		var totalgrowth = 0;
+		var yeargrowth = 0;
 		var daygrowth = 0;
 		var weekgrowth = 0;
 		var monthgrowth = 0;
 		var sixmonthgrowth = 0;
+		var totalgrowth = 0;
 		var years = [];
-		var growth = [];
-		for (var i = 0; i < data.date.length-1; i++) {
+		var yearlygrowth = [];
+		var chartgrowth = [];
+		for (var i = data.date.length-1; i >= 1; i--) {
 			newyear = data.date[i].split("-")[0];
 			if (year != newyear) {
-				if (totalgrowth != 0) {
+				if (yeargrowth != 0) {
 					years.push(year);
-					growth.push(totalgrowth * 100);
+					yearlygrowth.push(yeargrowth * 100);
 					
-					totalgrowth = 0;
+					yeargrowth = 0;
 				}
 				
 				year = newyear;
 			}
 			
-			delta = (data.value[i] - data.value[i+1]) / data.value[i+1];
+			delta = (data.value[i-1] - data.value[i]) / data.value[i];
+			yeargrowth += delta;
 			totalgrowth += delta;
+
+			chartgrowth.push([moment(data.date[i]).valueOf(), round(totalgrowth * 100)]);
 			
 			if (last.diff(moment(data.date[i]), "days") == 1) {
 				daygrowth += delta;
@@ -616,21 +714,24 @@ function analyze_stock(tick, type) {
 			}
 		}
 		
-		if (totalgrowth != 0) {
+		if (yeargrowth != 0) {
 			years.push(year);
-			growth.push(totalgrowth * 100);
+			yearlygrowth.push(yeargrowth * 100);
 		}
 		
+		years.reverse();
+		yearlygrowth.reverse();
 		stock_data[tick][type]["growth"] = {
 			date: years,
-			value: growth,
+			value: yearlygrowth,
 		};
 		
 		stock_data[tick][type]["daygrowth"] = daygrowth * 100;
 		stock_data[tick][type]["weekgrowth"] = weekgrowth * 100;
 		stock_data[tick][type]["monthgrowth"] = monthgrowth * 100;
 		stock_data[tick][type]["sixmonthgrowth"] = sixmonthgrowth * 100;
-		stock_data[tick][type]["totalgrowth"] = growth.reduce(function(a, b) { return a+b; });
+		stock_data[tick][type]["totalgrowth"] = yearlygrowth.reduce(function(a, b) { return a+b; });
+		stock_data[tick][type]["chartgrowth"] = chartgrowth;
 	}
 }
 
