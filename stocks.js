@@ -3,7 +3,7 @@ var base_url = "https://genotrance.github.io/stocks/";
 var mstar = "http://quotes.morningstar.com/fund/f?t=";
 var gfin = "https://www.google.com/finance?client=ob&q=";
 var yql = "https://query.yahooapis.com/v1/public/yql";
-var jquery = "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js";
+var jquery = "https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js";
 var cookie = "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js";
 var momentjs = "https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.3/moment.min.js";
 var datatable = "https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.1/js/jquery.dataTables.min.js";
