@@ -11,7 +11,7 @@ var datatable_css = "https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.1/cs
 var storageapi = "http://cdn.lukej.me/jquery.storage-api/1.7.2/jquery.storageapi.min.js";
 var highstock = "https://cdnjs.cloudflare.com/ajax/libs/highstock/2.0.4/highstock.js";
 var NAMESPACE = "com.genotrance.stocks";
-var DURATION = "1 years";
+var DURATION = "50 years";
 
 var deps = [jquery, momentjs, datatable, storageapi, highstock];
 var css = [datatable_css];
@@ -21,6 +21,7 @@ var table = null;
 var chart = null;
 var storage = null;
 var mobile = false;
+var current = "latest";
 
 if (window.matchMedia) {
 	var mobile = window.matchMedia("only screen and (max-width: 760px)");
@@ -31,9 +32,9 @@ var gui =
 	'<div id="popup" name="popup">' +
 		'Add Ticker(s): <input type="text" name="tick" id="tick"></input> ' +
 		'<a href="#" onclick="clear_all();return false;">Clear</a> ' +
-		'<a href="#" onclick="delete_ticker();return false;">Delete</a> ' +
-		'<a href="#" onclick="show_table(\'latest\');return false;">Latest</a> ' + 
-		'<a href="#" onclick="show_table(\'history\');return false;">History</a> ' + 
+		'<a href="#" onclick="delete_tickers();return false;">Delete</a> ' +
+		'<a href="#" onclick="show_table(\'latest\');return false;">Price</a> ' + 
+		'<a href="#" onclick="show_table(\'history\');return false;">Growth</a> ' + 
 		'<a href="#" onclick="show_table(\'dividend\');return false;">Dividend</a> ' + 
 		'<div id="message" name="message"></div><br/><br/>' +
 		'<div id="title"></div>' +
@@ -91,7 +92,8 @@ function initialize() {
 	bind_events();
 	
 	setup_localstorage();
-	refresh_stocks();
+	
+	setTimeout(function() { refresh_stocks(); }, 5000);
 }
 
 // Wait for pending transactions
@@ -253,6 +255,17 @@ function add_to_table(tick) {
 	table.draw();
 }
 
+// Get selected ticks
+function get_selected_ticks() {
+	var ticks = [];
+	var data = table.rows(".selected").data();
+	for (var i = 0; i < data.length; i++) {
+		ticks.push(data[i][0].replace(/<.*?>/g, ""));
+	}
+	
+	return ticks;
+}
+
 // Find and act on table row
 function do_in_table(func, tick) {
 	var ticks = table.column(0).data();
@@ -285,11 +298,9 @@ function setup_charts() {
 		chart: {
 			type: "line"
 		},
-		title: {
-			text: "%Growth"
-		},
-		legend: {
-			enabled: true
+
+		tooltip: {
+			pointFormat: '<span style="color:{series.color}">\u25CF</span> {series.name}: <b>{point.y:.2f}</b><br/>'
 		}
 	});
 	
@@ -300,7 +311,16 @@ function setup_charts() {
 function add_to_chart(tick) {
 	remove_from_chart(tick);
 	
-	chart.addSeries({name: tick, data: stock_data[tick].historical.chartgrowth});
+	var chartdata = null;
+	if (current == "latest") {
+		chartdata = stock_data[tick].historical.chartprice;
+	} else if (current == "history") {
+		chartdata = stock_data[tick].historical.chartgrowth;
+	} else if (current == "dividend") {
+		chartdata = stock_data[tick].dividend.chartdividend;
+	}
+	
+	chart.addSeries({name: tick, data: chartdata});
 }
 
 // Find and act on chart series
@@ -317,14 +337,14 @@ function remove_from_chart(tick) {
 	do_in_chart(function(series) { series.remove(); }, tick);
 }
 
-// Hide all series in chart
-function hide_all_in_chart() {
-	do_in_chart(function(series) { series.hide(); }, null);
-}
-
 // Show series in chart
 function show_in_chart(tick) {
 	do_in_chart(function(series) { series.show(); }, tick);
+}
+
+// Hide series in chart
+function hide_in_chart(tick) {
+	do_in_chart(function(series) { series.hide(); }, tick);
 }
 
 //////
@@ -337,11 +357,14 @@ function bind_events() {
 	$("#tick").bind("change", add_ticker);
 	
 	table.on("click", 'tr', function() {
+		var tick = $('td', this).eq(0).text();
+
 		if ($(this).hasClass("selected")) {
 			$(this).removeClass("selected");
+			remove_from_chart(tick);
 		} else {
-			table.$("tr.selected").removeClass("selected");
 			$(this).addClass("selected");
+			add_to_chart(tick);
 		}
 	});
 }
@@ -371,15 +394,16 @@ function add_ticker() {
 }
 
 // Delete ticker
-function delete_ticker() {
-	var data = table.row(".selected").data();
-	var tick = data[0].replace(/<.*?>/g, "");
-	
-	delete stock_data[tick];
-	storage.remove("stock_data." + tick);
-	
-	remove_from_table(tick);
-	remove_from_chart(tick);
+function delete_tickers() {
+	var ticks = get_selected_ticks();
+
+	for (var i = 0; i < ticks.length; i++) {
+		delete stock_data[ticks[i]];
+		storage.remove("stock_data." + ticks[i]);
+		
+		remove_from_table(ticks[i]);
+		remove_from_chart(ticks[i]);
+	}
 }
 
 // Clear all tickers
@@ -393,13 +417,15 @@ function clear_all() {
 
 // Show requested table
 function show_table(cols) {
+	current = cols;
+	
 	var unhide = [];
 	if (cols == "latest") {
 		unhide = [2, 3, 4, 5, 6];
-		$("#title").html("Latest Update");
+		$("#title").html("Price History");
 	} else if (cols == "history") {
 		unhide = [7, 8, 9, 10, 11, 12, 13, 14];
-		$("#title").html("Pricing History");
+		$("#title").html("Growth History");
 	} else if (cols == "dividend") {
 		unhide = [15, 16, 17, 18, 19, 20, 21];
 		$("#title").html("Dividend History");
@@ -411,6 +437,12 @@ function show_table(cols) {
 		} else {
 			table.column(i).visible(false);
 		}
+	}
+	
+	var ticks = get_selected_ticks();
+	for (var i = 0; i < ticks.length; i++) {
+		remove_from_chart(ticks[i]);
+		add_to_chart(ticks[i]);
 	}
 }
 
@@ -639,6 +671,7 @@ function analyze_stock(tick, type) {
 		var totalgrowth = 0;
 		var years = [];
 		var yearlygrowth = [];
+		var chartprice = [];
 		var chartgrowth = [];
 		for (var i = data.date.length-1; i >= 1; i--) {
 			newyear = data.date[i].split("-")[0];
@@ -657,7 +690,8 @@ function analyze_stock(tick, type) {
 			yeargrowth += delta;
 			totalgrowth += delta;
 
-			chartgrowth.push([moment(data.date[i]).valueOf(), round(totalgrowth * 100)]);
+			chartprice.push([moment(data.date[i]).valueOf(), data.value[i]]);
+			chartgrowth.push([moment(data.date[i]).valueOf(), totalgrowth * 100]);
 			
 			if (last.diff(moment(data.date[i]), "days") == 1) {
 				daygrowth += delta;
@@ -677,6 +711,8 @@ function analyze_stock(tick, type) {
 			}
 		}
 		
+		chartprice.push([moment(data.date[i]).valueOf(), data.value[i]]);
+		
 		if (yeargrowth != 0) {
 			years.push(year);
 			yearlygrowth.push(yeargrowth * 100);
@@ -694,6 +730,7 @@ function analyze_stock(tick, type) {
 		stock_data[tick][type]["monthgrowth"] = monthgrowth * 100;
 		stock_data[tick][type]["sixmonthgrowth"] = sixmonthgrowth * 100;
 		stock_data[tick][type]["totalgrowth"] = yearlygrowth.reduce(function(a, b) { return a+b; });
+		stock_data[tick][type]["chartprice"] = chartprice;
 		stock_data[tick][type]["chartgrowth"] = chartgrowth;
 	}
 }
@@ -711,16 +748,19 @@ function analyze_dividend_percentage(tick) {
 				var damount = value[type].data.value;
 				var hdate = value["historical"].data.date;
 				var hprice = value["historical"].data.value;
+				var chartdividend = [];
 				
 				var percent = [];
 				for (var i = 0; i < ddate.length; i++) {
 					var idx = $.inArray(ddate[i], hdate);
 					if (idx != -1) {
 						percent.push(damount[i] / hprice[idx] * 100);
+						chartdividend.push([moment(ddate[i]).valueOf(), percent[i]]);
 					}
 				}
 				
 				stock_data[tick][type].data["percent"] = percent;
+				stock_data[tick][type]["chartdividend"] = chartdividend.reverse();
 				
 				stock_data[tick][type]["lastpercent"] = percent[0];
 				stock_data[tick][type]["maxpercent"] = Math.max.apply(Math, percent);
@@ -786,7 +826,6 @@ function analyze_dividend_percentage(tick) {
 				stock_data[tick][type]["historical"]["avgpercent"] = data.percent.slice(1).reduce(function(p,c,i){return p+(c-p)/(i+1)},0);
 			}
 			add_to_table(tick);
-			add_to_chart(tick);
 		}
 	}
 
