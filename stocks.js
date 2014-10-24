@@ -4,17 +4,18 @@ var mstar = "http://quotes.morningstar.com/fund/f?t=";
 var gfin = "https://www.google.com/finance?client=ob&q=";
 var yql = "https://query.yahooapis.com/v1/public/yql";
 var jquery = "https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js";
-var cookie = "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js";
-var momentjs = "https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.3/moment.min.js";
-var datatable = "https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.1/js/jquery.dataTables.min.js";
-var datatable_css = "https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.1/css/jquery.dataTables.min.css";
+var cookie = "http://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js";
+var momentjs = "http://cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.3/moment.min.js";
+var datatable = "http://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.1/js/jquery.dataTables.min.js";
+var datatable_css = "http://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.1/css/jquery.dataTables.min.css";
 var storageapi = "http://cdn.lukej.me/jquery.storage-api/1.7.2/jquery.storageapi.min.js";
-var highstock = "https://cdnjs.cloudflare.com/ajax/libs/highstock/2.0.4/highstock.js";
+var highstock = "http://cdnjs.cloudflare.com/ajax/libs/highstock/2.0.4/highstock.js";
+var fontawesome_css = "http://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css";
 var NAMESPACE = "com.genotrance.stocks";
 var DURATION = "50 years";
 
 var deps = [jquery, momentjs, datatable, storageapi, highstock];
-var css = [datatable_css];
+var css = [datatable_css, fontawesome_css];
 var stock_data = {};
 var pending = 0;
 var table = null;
@@ -30,12 +31,13 @@ if (window.matchMedia) {
 // HTML
 var gui =
 	'<div id="popup" name="popup">' +
-		'Add Ticker(s): <input type="text" name="tick" id="tick"></input> ' +
-		'<a href="#" onclick="clear_all();return false;">Clear</a> ' +
-		'<a href="#" onclick="delete_tickers();return false;">Delete</a> ' +
-		'<a href="#" onclick="show_table(\'latest\');return false;">Price</a> ' + 
-		'<a href="#" onclick="show_table(\'history\');return false;">Growth</a> ' + 
-		'<a href="#" onclick="show_table(\'dividend\');return false;">Dividend</a> ' + 
+		'Add Ticker(s): <input type="text" name="tick" id="tick"></input>&nbsp;&nbsp;' +
+		'<a href="#" onclick="refresh_stocks();return false;" title="Refresh"><i class="fa fa-refresh fa-lg"></i></a>&nbsp;&nbsp;' +
+		'<a href="#" onclick="clear_all();return false;" title="Clear"><i class="fa fa-recycle fa-lg"></i></a>&nbsp;&nbsp;' +
+		'<a href="#" onclick="delete_tickers();return false;" title="Delete"><i class="fa fa-remove fa-lg"></i></a>&nbsp;&nbsp;' +
+		'<a href="#" onclick="show_table(\'latest\');return false;" title="Pricing History"><i class="fa fa-dollar fa-lg"></i></a>&nbsp;&nbsp;' + 
+		'<a href="#" onclick="show_table(\'history\');return false;" title="Growth History"><i class="fa fa-plus fa-lg"></i></a>&nbsp;&nbsp;' + 
+		'<a href="#" onclick="show_table(\'dividend\');return false;" title="Dividend History"><i class="fa fa-money fa-lg"></i></a>&nbsp;&nbsp;' + 
 		'<div id="message" name="message"></div><br/><br/>' +
 		'<div id="title"></div>' +
 		'<table id="table"></table>' + 
@@ -422,7 +424,7 @@ function show_table(cols) {
 	var unhide = [];
 	if (cols == "latest") {
 		unhide = [2, 3, 4, 5, 6];
-		$("#title").html("Price History");
+		$("#title").html("Pricing History");
 	} else if (cols == "history") {
 		unhide = [7, 8, 9, 10, 11, 12, 13, 14];
 		$("#title").html("Growth History");
